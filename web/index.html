@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Go Learn — путь до middle</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu" class="icon" aria-label="Меню">☰</button>
+  <a class="brand" href="#/"><span class="gopher">Go</span> Learn</a>
+  <nav class="topnav">
+    <a href="#/" data-nav="home">Путь</a>
+    <a href="#/cards" data-nav="cards">Карточки</a>
+    <a href="#/page/cheatsheet" data-nav="cheatsheet">Шпаргалка</a>
+    <a href="#/page/middle" data-nav="middle">Чек-лист middle</a>
+  </nav>
+  <div class="overall" title="Общий прогресс"><div class="bar"><i id="overallBar"></i></div><span id="overallPct">0%</span></div>
+  <button id="theme" class="icon" aria-label="Тема">◐</button>
+</header>
+<div class="shell">
+  <aside id="side"></aside>
+  <main id="main"><p class="muted">Загрузка…</p></main>
+</div>
+<script src="/md.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

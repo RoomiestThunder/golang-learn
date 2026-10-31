@@ -1,0 +1,8 @@
+# сборка и временные файлы
+/golearn
+/golearn-bin
+*.test
+.progress.tmp
+.DS_Store
+.claude/
+# progress.json НАМЕРЕННО в репозитории — через него синхронизируется прогресс между устройствами
