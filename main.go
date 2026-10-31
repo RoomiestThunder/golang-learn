@@ -95,6 +95,19 @@ func (s *Server) routes() http.Handler {
 	return guard(mux)
 }
 
+// extraHostAllowed разрешает Host, который приходит через проброс портов GitHub Codespaces
+// (<codespace>-<port>.<домен>; порт в Codespaces приватный — доступен только владельцу)
+// и явно перечисленные в GOLEARN_ALLOWED_HOSTS хосты (через запятую).
+func extraHostAllowed(h string) bool {
+	for _, a := range strings.Split(os.Getenv("GOLEARN_ALLOWED_HOSTS"), ",") {
+		if a = strings.TrimSpace(a); a != "" && strings.EqualFold(h, a) {
+			return true
+		}
+	}
+	name, domain := os.Getenv("CODESPACE_NAME"), os.Getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+	return name != "" && domain != "" && strings.HasPrefix(h, name+"-") && strings.HasSuffix(h, "."+domain)
+}
+
 // guard защищает от запросов с чужих сайтов (CSRF / DNS rebinding):
 // принимаем только localhost-хосты и требуем свой заголовок на изменяющих запросах.
 func guard(next http.Handler) http.Handler {
@@ -103,7 +116,7 @@ func guard(next http.Handler) http.Handler {
 		if err != nil {
 			h = r.Host
 		}
-		if h != "127.0.0.1" && h != "localhost" && h != "[::1]" && h != "::1" {
+		if h != "127.0.0.1" && h != "localhost" && h != "[::1]" && h != "::1" && !extraHostAllowed(h) {
 			http.Error(w, "forbidden host", http.StatusForbidden)
 			return
 		}

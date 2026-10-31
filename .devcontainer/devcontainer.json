@@ -1,0 +1,16 @@
+{
+  "name": "Go Learn",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": { "version": "latest" }
+  },
+  "forwardPorts": [8088],
+  "portsAttributes": {
+    "8088": { "label": "Go Learn", "onAutoForward": "openBrowser", "visibility": "private" }
+  },
+  "customizations": {
+    "vscode": { "extensions": ["golang.go"] }
+  },
+  "postCreateCommand": "go version && go build ./...",
+  "postAttachCommand": "./run.sh"
+}
