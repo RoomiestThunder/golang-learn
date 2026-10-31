@@ -1,6 +1,7 @@
 .git
 .devcontainer
 .claude
+.env
 golearn
 golearn-bin
 *.test

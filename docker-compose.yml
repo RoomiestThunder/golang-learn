@@ -1,0 +1,30 @@
+# Свой сервер (VPS) с HTTPS: платформа + Caddy, который сам получает сертификат.
+# Нужен файл .env рядом (см. .env.example): DOMAIN и GOLEARN_PASSWORD.
+services:
+  golearn:
+    build: .
+    restart: unless-stopped
+    environment:
+      GOLEARN_PASSWORD: ${GOLEARN_PASSWORD:?задай GOLEARN_PASSWORD в файле .env}
+    volumes:
+      - golearn_data:/data   # прогресс; переживает пересборку и перезапуск
+    expose:
+      - "8088"               # наружу не публикуется — только через Caddy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - golearn
+    environment:
+      DOMAIN: ${DOMAIN:?задай DOMAIN в файле .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data     # сертификаты
+
+volumes:
+  golearn_data:
+  caddy_data:

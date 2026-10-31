@@ -1,0 +1,4 @@
+# {$DOMAIN} берётся из окружения контейнера (docker-compose.yml). HTTPS-сертификат Caddy получает сам.
+{$DOMAIN} {
+	reverse_proxy golearn:8088
+}

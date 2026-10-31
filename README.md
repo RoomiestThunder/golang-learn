@@ -166,6 +166,29 @@ fly deploy
 
 Локально образ проверяется так: `docker build -t golearn .` и `docker run -p 8088:8088 -e GOLEARN_PASSWORD=длинный-пароль-тут golearn`.
 
+### Свой сервер (VPS) с HTTPS
+
+Подходит, например, бесплатная `e2-micro` в Google Cloud или любой VPS с Docker. `docker-compose.yml` поднимает платформу и Caddy, который сам получает HTTPS-сертификат (без HTTPS пароль ушёл бы открытым текстом).
+
+1. Возьми домен: бесплатный поддомен на duckdns.org направь на внешний IP сервера.
+2. Открой порты 80 и 443 (в Google Cloud — «Allow HTTP/HTTPS traffic» при создании виртуалки).
+3. На сервере выполни (на машине с 1 ГБ памяти swap обязателен — компиляция Go иначе не влезет):
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+curl -fsSL https://get.docker.com | sudo sh
+git clone -b hosting https://github.com/RoomiestThunder/golang-learn.git && cd golang-learn
+cp .env.example .env && nano .env      # впиши DOMAIN и GOLEARN_PASSWORD
+sudo docker compose up -d --build
+```
+
+Открой `https://<твой домен>` — браузер спросит пароль. Первая сборка занимает несколько минут.
+
+- Обновить: `git pull && sudo docker compose up -d --build`.
+- Прогресс лежит в docker-томе `golearn_data` и переживает пересборку. Скопировать себе: `sudo docker compose cp golearn:/data/progress.json .`.
+- Логи: `sudo docker compose logs -f`.
+
 ## Сброс прогресса
 
 Удали `progress.json` (или укажи другой файл флагом `-data`).
