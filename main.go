@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -28,28 +30,50 @@ type Server struct {
 	runner   *Runner
 	dev      bool
 	course   *Course
+	password string // непустой — включена защита паролем (режим хостинга)
+}
+
+// minPasswordLen — минимальная длина пароля для запуска вне localhost: за ним стоит выполнение кода.
+const minPasswordLen = 12
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// defaultAddr: на хостингах порт приходит в PORT, локально — только localhost.
+func defaultAddr() string {
+	if p := os.Getenv("PORT"); p != "" {
+		return ":" + p
+	}
+	return "127.0.0.1:8088"
 }
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8088", "адрес сервера (только локальный)")
-	data := flag.String("data", "progress.json", "файл с прогрессом")
+	addr := flag.String("addr", envOr("GOLEARN_ADDR", defaultAddr()), "адрес сервера (вне localhost — только с GOLEARN_PASSWORD)")
+	data := flag.String("data", envOr("GOLEARN_DATA", "progress.json"), "файл с прогрессом")
 	dev := flag.Bool("dev", false, "читать content/ и web/ с диска (правка материалов без пересборки)")
 	flag.Parse()
+
+	password := os.Getenv("GOLEARN_PASSWORD")
+	host, _, _ := net.SplitHostPort(*addr)
+	local := host == "127.0.0.1" || host == "localhost" || host == "::1"
+	if !local && len(password) < minPasswordLen {
+		log.Fatalf("сервер выполняет произвольный код: вне localhost его можно запускать только с паролем в GOLEARN_PASSWORD (минимум %d символов)", minPasswordLen)
+	}
 
 	runner, err := NewRunner()
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := &Server{dataPath: *data, runner: runner, dev: *dev, prog: loadProgress(*data)}
+	s := &Server{dataPath: *data, runner: runner, dev: *dev, prog: loadProgress(*data), password: password}
 	if _, err := s.getCourse(); err != nil {
 		log.Fatalf("контент: %v", err)
 	}
 	go s.backgroundSync()
 
-	host, _, _ := net.SplitHostPort(*addr)
-	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
-		log.Fatal("сервер выполняет произвольный код, слушать можно только localhost")
-	}
 	fmt.Printf("\n  Go Learn запущен:  http://%s\n  Прогресс хранится в: %s\n\n", *addr, *data)
 	log.Fatal(http.ListenAndServe(*addr, s.routes()))
 }
@@ -92,7 +116,32 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/lc/sync", s.handleLCSync)
 	mux.HandleFunc("POST /api/card", s.handleCard)
 	mux.HandleFunc("POST /api/check-item", s.handleCheckItem)
-	return guard(mux)
+	// С паролем сервер открыт наружу: вход по паролю заменяет проверку Host (она нужна только локально).
+	h := guard(mux, s.password == "")
+	if s.password != "" {
+		h = basicAuth(s.password, h)
+	}
+	return h
+}
+
+var failedAuth sync.Mutex // неудачные попытки входа идут по одной в секунду
+
+// basicAuth пускает только с верным паролем (логин любой). Браузер сам запомнит пароль на сессию.
+func basicAuth(password string, next http.Handler) http.Handler {
+	want := sha256.Sum256([]byte(password))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, given, ok := r.BasicAuth()
+		got := sha256.Sum256([]byte(given))
+		if !ok || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
+			failedAuth.Lock()
+			time.Sleep(time.Second)
+			failedAuth.Unlock()
+			w.Header().Set("WWW-Authenticate", `Basic realm="Go Learn", charset="UTF-8"`)
+			http.Error(w, "нужен пароль", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // extraHostAllowed разрешает Host, который приходит через проброс портов GitHub Codespaces
@@ -110,13 +159,13 @@ func extraHostAllowed(h string) bool {
 
 // guard защищает от запросов с чужих сайтов (CSRF / DNS rebinding):
 // принимаем только localhost-хосты и требуем свой заголовок на изменяющих запросах.
-func guard(next http.Handler) http.Handler {
+func guard(next http.Handler, checkHost bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			h = r.Host
 		}
-		if h != "127.0.0.1" && h != "localhost" && h != "[::1]" && h != "::1" && !extraHostAllowed(h) {
+		if checkHost && h != "127.0.0.1" && h != "localhost" && h != "[::1]" && h != "::1" && !extraHostAllowed(h) {
 			http.Error(w, "forbidden host", http.StatusForbidden)
 			return
 		}

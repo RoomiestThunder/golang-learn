@@ -1,0 +1,7 @@
+.git
+.devcontainer
+.claude
+golearn
+golearn-bin
+*.test
+.progress.tmp

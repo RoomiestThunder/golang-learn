@@ -61,10 +61,21 @@ func (l *limitedBuf) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// childEnv — окружение для кода пользователя без настроек самой платформы (в т.ч. пароля).
+func childEnv() []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "GOLEARN_") {
+			env = append(env, kv)
+		}
+	}
+	return env
+}
+
 func runCmd(dir string, timeout time.Duration, name string, args ...string) (string, int, bool) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOPROXY=off", "GOFLAGS=", "CGO_ENABLED=0", "GO111MODULE=on")
+	cmd.Env = append(childEnv(), "GOTOOLCHAIN=local", "GOPROXY=off", "GOFLAGS=", "CGO_ENABLED=0", "GO111MODULE=on")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	out := &limitedBuf{max: 64 << 10}
 	cmd.Stdout, cmd.Stderr = out, out
