@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Go Learn — вход</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f7f9; --card: #fff; --fg: #1c2024; --muted: #6b7280; --accent: #00a7c7; --err: #d93025; --line: #d9dde3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1216; --card: #181c22; --fg: #e6e8eb; --muted: #8b94a1; --line: #2a3038; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  form { width: 100%; max-width: 340px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  input, button { width: 100%; font: inherit; padding: 10px 12px; border-radius: 8px; }
+  input { border: 1px solid var(--line); background: transparent; color: inherit; }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { margin-top: 12px; border: 0; background: var(--accent); color: #00242c; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  #err { min-height: 1.5em; margin-top: 8px; color: var(--err); font-size: 14px; }
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>Go Learn</h1>
+  <p>Введи пароль, чтобы продолжить обучение.</p>
+  <input id="pw" type="password" autocomplete="current-password" placeholder="Пароль" required autofocus>
+  <button id="go">Войти</button>
+  <div id="err" role="alert"></div>
+</form>
+<script>
+  const f = document.getElementById('f'), err = document.getElementById('err'), btn = document.getElementById('go');
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true; err.textContent = '';
+    try {
+      const r = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'golearn', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: document.getElementById('pw').value }),
+      });
+      if (r.ok) { location.replace('/'); return; }
+      err.textContent = (await r.json().catch(() => ({}))).error || 'Ошибка входа';
+    } catch { err.textContent = 'Нет связи с сервером'; }
+    btn.disabled = false;
+  });
+</script>
+</body>
+</html>

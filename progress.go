@@ -91,7 +91,12 @@ func saveProgress(path string, p *Progress) error {
 	if err := os.WriteFile(tmp, b, 0o644); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		// не все файловые системы (например, Cloud Storage FUSE) умеют rename — пишем напрямую
+		_ = os.Remove(tmp)
+		return os.WriteFile(path, b, 0o644)
+	}
+	return nil
 }
 
 // ---- LeetCode: публичный GraphQL, читает последние принятые решения профиля ----

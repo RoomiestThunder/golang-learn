@@ -1,0 +1,48 @@
+# Платформа за HTTPS-прокси Caddy (сертификат Let's Encrypt выпускается сам).
+# Запуск: cp .env.example .env && nano .env && docker compose up -d --build
+services:
+  golearn:
+    build: .
+    restart: unless-stopped
+    environment:
+      GOLEARN_PASSWORD: ${GOLEARN_PASSWORD:?задай GOLEARN_PASSWORD в файле .env}
+      GOLEARN_ALLOWED_HOSTS: ${DOMAIN:?задай DOMAIN в файле .env}
+    volumes:
+      - data:/data     # прогресс (progress.json)
+      - cache:/cache   # кэш сборки Go — ускоряет проверку заданий
+    # Код ученика исполняется внутри этого контейнера — он и есть песочница.
+    read_only: true
+    tmpfs:
+      - /tmp:exec,size=512m,mode=1777   # сюда собираются и отсюда запускаются программы (exec обязателен)
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    mem_limit: 1536m
+    cpus: 2
+    expose: ["8088"]   # наружу порт не публикуется — только через Caddy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8088/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [golearn]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?задай DOMAIN в файле .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data     # выпущенные сертификаты
+      - caddy_config:/config
+
+volumes:
+  data:
+  cache:
+  caddy_data:
+  caddy_config:

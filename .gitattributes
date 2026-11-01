@@ -1,0 +1,3 @@
+# Скрипты и Dockerfile исполняются в Linux — переводы строк CRLF их ломают
+*.sh text eol=lf
+Dockerfile text eol=lf

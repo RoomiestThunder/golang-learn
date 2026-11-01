@@ -9,6 +9,7 @@ async function api(path, method = 'GET', body) {
   const opt = { method, headers: { 'X-Requested-With': 'golearn' } };
   if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
   const r = await fetch('/api' + path, opt);
+  if (r.status === 401) { location.href = '/login'; throw new Error('нужен вход'); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;

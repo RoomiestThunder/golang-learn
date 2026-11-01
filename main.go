@@ -28,28 +28,35 @@ type Server struct {
 	runner   *Runner
 	dev      bool
 	course   *Course
+	auth     *auth // nil — вход без пароля (только localhost)
 }
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8088", "адрес сервера (только локальный)")
+	addr := flag.String("addr", "127.0.0.1:8088", "адрес сервера (не localhost — только вместе с GOLEARN_PASSWORD)")
 	data := flag.String("data", "progress.json", "файл с прогрессом")
 	dev := flag.Bool("dev", false, "читать content/ и web/ с диска (правка материалов без пересборки)")
 	flag.Parse()
+
+	// Сервер выполняет произвольный код: вне localhost его можно открыть только под паролем.
+	host, _, _ := net.SplitHostPort(*addr)
+	password := os.Getenv("GOLEARN_PASSWORD")
+	if host != "127.0.0.1" && host != "localhost" && host != "::1" && len(password) < minPasswordLen {
+		log.Fatalf("сервер выполняет произвольный код: чтобы слушать не только localhost, задай пароль в GOLEARN_PASSWORD (минимум %d символов)", minPasswordLen)
+	}
 
 	runner, err := NewRunner()
 	if err != nil {
 		log.Fatal(err)
 	}
 	s := &Server{dataPath: *data, runner: runner, dev: *dev, prog: loadProgress(*data)}
+	if password != "" {
+		s.auth = newAuth(password)
+	}
 	if _, err := s.getCourse(); err != nil {
 		log.Fatalf("контент: %v", err)
 	}
 	go s.backgroundSync()
 
-	host, _, _ := net.SplitHostPort(*addr)
-	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
-		log.Fatal("сервер выполняет произвольный код, слушать можно только localhost")
-	}
 	fmt.Printf("\n  Go Learn запущен:  http://%s\n  Прогресс хранится в: %s\n\n", *addr, *data)
 	log.Fatal(http.ListenAndServe(*addr, s.routes()))
 }
@@ -92,7 +99,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/lc/sync", s.handleLCSync)
 	mux.HandleFunc("POST /api/card", s.handleCard)
 	mux.HandleFunc("POST /api/check-item", s.handleCheckItem)
-	return guard(mux)
+	if s.auth != nil {
+		return guard(s.auth.wrap(mux), true)
+	}
+	return guard(mux, false)
 }
 
 // extraHostAllowed разрешает Host, который приходит через проброс портов GitHub Codespaces
@@ -110,13 +120,15 @@ func extraHostAllowed(h string) bool {
 
 // guard защищает от запросов с чужих сайтов (CSRF / DNS rebinding):
 // принимаем только localhost-хосты и требуем свой заголовок на изменяющих запросах.
-func guard(next http.Handler) http.Handler {
+// Под паролем (anyHost) хост не проверяется: адрес на сервере заранее неизвестен, а чужому сайту
+// всё равно не достанется сессионная cookie.
+func guard(next http.Handler, anyHost bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			h = r.Host
 		}
-		if h != "127.0.0.1" && h != "localhost" && h != "[::1]" && h != "::1" && !extraHostAllowed(h) {
+		if !anyHost && h != "127.0.0.1" && h != "localhost" && h != "[::1]" && h != "::1" && !extraHostAllowed(h) {
 			http.Error(w, "forbidden host", http.StatusForbidden)
 			return
 		}
